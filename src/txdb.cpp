@@ -13,6 +13,7 @@
 #include "uint256.h"
 
 #include <stdint.h>
+#include <fstream>
 
 #include <boost/thread.hpp>
 
@@ -137,6 +138,53 @@ bool CCoinsViewDB::GetStats(CCoinsStats &stats) const {
     }
     stats.hashSerialized = ss.GetHash();
     stats.nTotalAmount = nTotalAmount;
+    return true;
+}
+
+bool CCoinsViewDB::DumpUtxo(std::string filename, int64_t* exportedHeight) const {
+    /* It seems that there are no "const iterators" for LevelDB.  Since we
+       only need read operations on it, use a const-cast to get around
+       that restriction.  */
+    boost::scoped_ptr<CDBIterator> pcursor(const_cast<CDBWrapper*>(&db)->NewIterator());
+    pcursor->Seek(DB_COINS);
+
+    std::ofstream outfile;
+    outfile.open(filename.c_str(), std::ofstream::out | std::ofstream::trunc);
+
+    CHashWriter ss(SER_GETHASH, PROTOCOL_VERSION);
+    uint256 hashBlock = GetBestBlock();
+    ss << hashBlock;
+    // write the hash for which this utxo-set is valid in the first row
+    {
+        LOCK(cs_main);
+        *exportedHeight = mapBlockIndex.find(hashBlock)->second->nHeight;
+    }
+    outfile << "height: " << *exportedHeight << ", " << hashBlock.GetHex() << "\n";
+    while (pcursor->Valid()) {
+        boost::this_thread::interruption_point();
+        std::pair<char, uint256> key;
+        CCoins coins;
+        if (pcursor->GetKey(key) && key.first == DB_COINS) {
+            if (pcursor->GetValue(coins)) {
+                for (unsigned int i=0; i<coins.vout.size(); i++) {
+                    const CTxOut &out = coins.vout[i];
+                    // its an unspent output
+                    if (!out.IsNull()) {
+                        ss << VARINT(i+1);
+                        ss << out;
+                        outfile << key.second.GetHex() << ":" << i << "\n";
+                    }
+                }
+                ss << VARINT(0);
+            } else {
+                return error("CCoinsViewDB::DumpUtxo() : unable to read value");
+            }
+        } else {
+            break;
+        }
+        pcursor->Next();
+    }
+    outfile.close();
     return true;
 }
 

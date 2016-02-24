@@ -39,6 +39,8 @@ public:
     uint256 GetBestBlock() const;
     bool BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock);
     bool GetStats(CCoinsStats &stats) const;
+    bool DumpUtxo(std::string filename, int64_t* exportedHeight) const;
+
 };
 
 /** Access to the block database (blocks/index/) */

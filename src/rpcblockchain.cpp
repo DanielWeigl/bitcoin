@@ -466,6 +466,34 @@ UniValue gettxoutsetinfo(const UniValue& params, bool fHelp)
     return ret;
 }
 
+UniValue dumptxoutsettodisk(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "dumptxoutsettodisk\n"
+            "\nDumps all unspent outpoints to a local file\n"
+            "Note this call may take some time.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"height\":n,     (numeric) The current block height (index)\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("dumptxoutsettodisk", "\"filename\"")
+            + HelpExampleRpc("dumptxoutsettodisk", "\"filename\"")
+        );
+
+    UniValue ret(UniValue::VOBJ);
+    std::string filename = params[0].get_str();
+
+    CCoinsStats stats;
+    FlushStateToDisk();
+    int64_t height;
+    if (pcoinsTip->DumpUtxo(filename, &height)) {
+        ret.push_back(Pair("height", height));
+    }
+    return ret;
+}
+
 UniValue gettxout(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 2 || params.size() > 3)
